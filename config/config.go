@@ -40,15 +40,15 @@ var ErrConfigFormat ErrCfgFormat
 var ErrConfigFilePath = errors.New("No valid configuration file path provided")
 
 func GetConfig(args []string) (cfg *Config, err error) {
-	if len(args) <= 1 {
-		return nil, ErrConfigFilePath
+	if len(args) < 2 {
+		cfg, err = newConfig()
+		return
 	}
 	file, err := os.Open(args[1])
 	if err != nil {
-		return
+		return nil, ErrConfigFilePath
 	}
 	defer file.Close()
-
 	cfg, err = parseConfig(bufio.NewReader(file))
 	return
 }
