@@ -6,6 +6,8 @@ import (
 	"github.com/argot42/watcher"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 func main() {
@@ -18,37 +20,45 @@ func main() {
 		log.Fatalln("config:", err)
 	}
 
-	ctl, transaction, status, err := setup(cfg)
+	ctl, err := setupFiles(cfg)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	err = start(ctl, transaction, status)
+	sigs := make(chan os.Signal, 1)
+
+	signal.Notify(sigs, syscall.SIGTERM)
+
+	err = start(ctl, sigs)
 	if err != nil {
 		log.Fatalln(err)
 	}
 }
 
-func setup(cfg *config.Config) (ctl watcher.Sub, transaction watcher.Sub, status watcher.Sub, err error) {
+func setupFiles(cfg *config.Config) (ctl watcher.Sub, err error) {
+	// watch control file
 	ctl, e := watcher.Watch(cfg.CtlFilePath)
 	if e != nil {
 		err = fmt.Errorf("error setting up ctl file: %s", e)
 		return
 	}
-	transaction, e = watcher.Watch(cfg.TransactionsLogPath)
-	if e != nil {
-		err = fmt.Errorf("error setting up transaction file: %s", e)
-		return
-	}
-	status, e = watcher.Watch(cfg.StatusPath)
-	if e != nil {
-		err = fmt.Errorf("error setting up status file: %s", e)
-		return
-	}
+
+	// for writing control file
 
 	return
 }
 
-func start(ctl watcher.Sub, transaction watcher.Sub, status watcher.Sub) error {
-	return fmt.Errorf("todo: everything")
+func start(ctl watcher.Sub, sigs chan os.Signal) error {
+End:
+	for {
+		select {
+		case input := <-ctl.Out:
+			fmt.Println(input)
+		case e := <-ctl.Err:
+			return fmt.Errorf("error control file: %s", e)
+		case <-sigs:
+			break End
+		}
+	}
+	return nil
 }
