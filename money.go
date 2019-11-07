@@ -43,8 +43,6 @@ func setupFiles(cfg *config.Config) (ctl watcher.Sub, err error) {
 		return
 	}
 
-	// for writing control file
-
 	return
 }
 
@@ -60,5 +58,6 @@ End:
 			break End
 		}
 	}
+
 	return nil
 }
