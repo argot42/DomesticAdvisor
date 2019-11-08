@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	"github.com/argot42/money/config"
+	"github.com/argot42/money/info"
 	"github.com/argot42/watcher"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 func main() {
@@ -20,7 +22,7 @@ func main() {
 		log.Fatalln("config:", err)
 	}
 
-	ctl, err := setupFiles(cfg)
+	ctl, status, err := setupFiles(cfg)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -29,15 +31,31 @@ func main() {
 
 	signal.Notify(sigs, syscall.SIGTERM)
 
-	err = start(ctl, sigs)
+	err = start(ctl, status, cfg.Timeout, sigs)
 	if err != nil {
 		log.Fatalln(err)
 	}
+
+	// cleaning
+	fmt.Println("Closing...")
+	status.Close()
+	close(ctl.Done)
+	// wait for children gorouting to end
+	fmt.Println("Waiting for goroutines to finish")
+	<-ctl.Out
+	fmt.Println("bye :)")
 }
 
-func setupFiles(cfg *config.Config) (ctl watcher.Sub, err error) {
+func setupFiles(cfg *config.Config) (ctl watcher.Sub, status *os.File, err error) {
 	// watch control file
 	ctl, e := watcher.Watch(cfg.CtlFilePath)
+	if e != nil {
+		err = fmt.Errorf("error setting up ctl file: %s", e)
+		return
+	}
+
+	// create status file
+	status, e = os.Create(cfg.StatusPath)
 	if e != nil {
 		err = fmt.Errorf("error setting up ctl file: %s", e)
 		return
@@ -46,14 +64,42 @@ func setupFiles(cfg *config.Config) (ctl watcher.Sub, err error) {
 	return
 }
 
-func start(ctl watcher.Sub, sigs chan os.Signal) error {
+func start(ctl watcher.Sub, status *os.File, timeout time.Duration, sigs chan os.Signal) error {
+	var buffer []byte
+	stats := info.NewStats()
+
 End:
 	for {
 		select {
 		case input := <-ctl.Out:
-			fmt.Println(input)
+			if input != 10 { // 10 is newline
+				buffer = append(buffer, input)
+				continue
+			}
+
+			out, err := info.Process(string(buffer), &stats)
+			if err != nil {
+				return err
+			}
+			err = info.Output(out, status)
+			if err != nil {
+				return err
+			}
+			buffer = nil
+
 		case e := <-ctl.Err:
 			return fmt.Errorf("error control file: %s", e)
+		case <-time.After(timeout * time.Second):
+			// force an update
+			out, err := info.Update(&stats)
+			if err != nil {
+				return err
+			}
+			err = info.Output(out, status)
+			if err != nil {
+				return err
+			}
+
 		case <-sigs:
 			break End
 		}
