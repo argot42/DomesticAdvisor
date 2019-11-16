@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/argot42/money/config"
-	"github.com/argot42/money/info"
+	"github.com/argot42/money/stats"
 	"github.com/argot42/watcher"
 	"log"
 	"os"
@@ -77,11 +77,11 @@ End:
 				continue
 			}
 
-			out, err := info.Process(string(buffer), &stats)
+			err := info.Process(string(buffer), &stats)
 			if err != nil {
 				return err
 			}
-			err = info.Output(out, status)
+			err = info.Output(status)
 			if err != nil {
 				return err
 			}
@@ -89,6 +89,7 @@ End:
 
 		case e := <-ctl.Err:
 			return fmt.Errorf("error control file: %s", e)
+
 		case <-time.After(timeout * time.Second):
 			// force an update
 			out, err := info.Update(&stats)
