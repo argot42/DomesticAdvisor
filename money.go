@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -66,7 +67,7 @@ func setupFiles(cfg *config.Config) (ctl watcher.Sub, status *os.File, err error
 
 func start(ctl watcher.Sub, status *os.File, timeout time.Duration, sigs chan os.Signal) error {
 	var buffer []byte
-	stats := info.NewStats()
+	s := stats.NewStats()
 
 End:
 	for {
@@ -77,11 +78,17 @@ End:
 				continue
 			}
 
-			err := info.Process(string(buffer), &stats)
+			// parse input
+			parsed, err := stats.Parse(strings.NewReader(string(buffer)))
 			if err != nil {
 				return err
 			}
-			err = info.Output(status)
+
+			err := stats.Process(parsed, &s)
+			if err != nil {
+				return err
+			}
+			err = stats.Output(status, s)
 			if err != nil {
 				return err
 			}
@@ -92,11 +99,11 @@ End:
 
 		case <-time.After(timeout * time.Second):
 			// force an update
-			out, err := info.Update(&stats)
+			err := stats.Update(&s)
 			if err != nil {
 				return err
 			}
-			err = info.Output(out, status)
+			err = stats.Output(status, s)
 			if err != nil {
 				return err
 			}

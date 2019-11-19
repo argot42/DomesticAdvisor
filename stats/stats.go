@@ -1,9 +1,10 @@
 package stats
 
 import (
+	"encoding/csv"
+	"encoding/json"
 	"errors"
-	"os"
-	"strings"
+	"io"
 	"time"
 )
 
@@ -18,7 +19,7 @@ type Tr struct { // transactions
 	Id          uint
 	Name        string
 	Date        time.Time // date the money was added/subtracted
-	Amount      float32
+	Amount      float64
 	Type        uint
 	Description string
 }
@@ -30,33 +31,30 @@ type Ev struct { // events
 	Id          uint
 	Date        time.Time // date money will be added/subtracted
 	Name        string
-	Amount      float32
+	Amount      float64
 	Type        uint
 	Description string
 }
 
 type Cache struct {
-	Treasury float32
+	Treasury float64
 	Month    Period
 	Year     Period
 }
 
 type Period struct {
-	Total    float32
-	Income   float32
-	Expenses float32
+	Total    float64
+	Income   float64
+	Expenses float64
 }
 
 // input commands names
 const INPUT string = "in"
 const PERIOD string = "pe"
 
-// errors
-const parsingCommandErr error = errors.New("Error parsing command")
-
 func NewStats() Stats {
 	return Stats{
-		[]Transactions{},
+		[]Tr{},
 		[]Ev{},
 		Cache{
 			0.0,
@@ -75,32 +73,41 @@ func NewStats() Stats {
 	}
 }
 
-func Update(s *Stats) (out string, err error) {
-	return processInput("", false, s)
+func Parse(in io.Reader) (out []string, err error) {
+	r := csv.NewReader(in)
+	r.Comma = ' '
+
+	return r.Read()
 }
 
-func Process(in string, s *Stats) (out string, err error) {
-	return processInput(in, true, s)
+func Update(s *Stats) error {
+	return processInput(nil, s)
 }
 
-func processInput(in string, newInfo bool, s *Stats) (err error) {
+func Process(in []string, s *Stats) error {
+	return processInput(in, s)
+}
+
+func processInput(in []string, s *Stats) error {
 	nTrans := checkEvents(s)
 
-	if newInfo {
-		err = runCmd(in, s)
+	if in != nil {
+		err := runCmd(in, s)
 		if err != nil {
-			return
+			return err
 		}
 	}
 
-	err = updateCache(s)
-	if err != nil {
-		return
+	if nTrans > 0 || in != nil {
+		err := updateCache(s)
+		if err != nil {
+			return err
+		}
 	}
 
 	s.LastCheck = time.Now()
 
-	return
+	return nil
 }
 
 func checkEvents(s *Stats) (nTrans int) {
@@ -127,14 +134,50 @@ func checkEvents(s *Stats) (nTrans int) {
 	return
 }
 
-func runCmd(in string, s *Stats) (int changes, err error) {
-	return 0, nil
+func runCmd(in []string, s *Stats) (err error) {
+	if len(in) < 1 {
+		return errors.New("no command")
+	}
+
+	switch in[0] {
+	case INPUT:
+		err = input(in[1:], s)
+	case PERIOD:
+		err = period(in[1:], s)
+	default:
+		return errors.New("invalid command")
+	}
+
+	return
 }
 
 func updateCache(s *Stats) (err error) {
+	total := 0.0
+
+	for _, tr := range s.Transactions {
+		total += tr.Amount
+	}
+	s.Cache.Treasury = total
+
 	return nil
 }
 
-func Output(out *os.File) error {
+func input(args []string, s *Stats) error {
+	// TODO
 	return nil
+}
+
+func period(args []string, s *Stats) error {
+	// TODO
+	return nil
+}
+
+func Output(out io.Writer, s Stats) error {
+	encoded, err := json.Marshal(s.Cache)
+	if err != nil {
+		return err
+	}
+
+	_, err = out.Write(encoded)
+	return err
 }
