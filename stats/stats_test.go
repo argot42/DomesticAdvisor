@@ -1,10 +1,10 @@
 package stats
 
 import (
+	"encoding/json"
 	"io"
 	"strings"
 	"testing"
-	"time"
 )
 
 type ParseCase struct {
@@ -69,89 +69,58 @@ func TestParse(t *testing.T) {
 	}
 }
 
-type UpdateCase struct {
-	Input   Stats
-	Output  Stats
-	Success bool
+func TestOutput(t *testing.T) {
+	s := NewStats()
+	var out strings.Builder
+
+	Output(&out, s)
+
+	outStr := out.String()
+	j, _ := json.Marshal(s.Cache)
+	expectedStr := string(j)
+
+	if outStr != expectedStr {
+		t.Fatalf("expected: %s | got %s", expectedStr, outStr)
+	}
 }
 
-func UpdateTest(t *testing.T) {
-	/** setup **/
-	// test case 1
-	testCases := []UpdateCase{
-		UpdateCase{
-			NewStats(),
-			NewStats(),
-			true,
-		},
+func TestNewStats(t *testing.T) {
+	s := NewStats()
+
+	// total
+	if s.Cache.Treasury != 0.0 {
+		t.Errorf("Treasury mismatch (%f --> 0.0)", s.Cache.Treasury)
 	}
 
-	// test case 2
-	input := NewStats()
-	output := NewStats()
-
-	tr := Tr{
-		0,
-		"test_transaction",
-		time.Now(),
-		100,
-		0,
-		"test description",
+	// month
+	if s.Cache.Month.Total != 0.0 {
+		t.Errorf("Month Total (%f --> 0.0)", s.Cache.Month.Total)
 	}
-	input.Transactions = append(input.Transactions, tr)
-	output.Transactions = append(output.Transactions, tr)
-	output.Cache.Treasury = 100
+	if s.Cache.Month.Income != 0.0 {
+		t.Errorf("Month Income (%f --> 0.0)", s.Cache.Month.Income)
+	}
+	if s.Cache.Month.Expenses != 0.0 {
+		t.Errorf("Month Expenses (%f --> 0.0)", s.Cache.Month.Expenses)
+	}
 
-	testCases = append(testCases, UpdateCase{
-		input,
-		output,
-		true,
-	})
-	/*********/
+	// year
+	if s.Cache.Year.Total != 0.0 {
+		t.Errorf("Year Total (%f --> 0.0)", s.Cache.Year.Total)
+	}
+	if s.Cache.Year.Income != 0.0 {
+		t.Errorf("Year Total (%f --> 0.0)", s.Cache.Year.Income)
+	}
+	if s.Cache.Year.Expenses != 0.0 {
+		t.Errorf("Year Expenses (%f --> 0.0", s.Cache.Year.Expenses)
+	}
 
-	// begin test
-	for i, tc := range testCases {
-		err := Update(&tc.Input)
-		if err != nil {
-			if tc.Success {
-				t.Fatalf("test %d failed with %s", i, err)
-			}
-			continue
-		}
+	// events
+	if len(s.Events) != 0 {
+		t.Errorf("Events should be empty (%v)", s.Events)
+	}
 
-		// check cache
-		if tc.Input.Cache.Treasury != tc.Output.Cache.Treasury {
-			if tc.Success {
-				t.Fatalf("test %d treasury mismatch", i)
-			}
-		}
-		if tc.Input.Cache.Month != tc.Output.Cache.Month {
-			if tc.Success {
-				t.Fatalf("test %d month mismatch", i)
-			}
-		}
-		if tc.Input.Cache.Year != tc.Output.Cache.Year {
-			if tc.Success {
-				t.Fatalf("test %d year mismatch", i)
-			}
-		}
-
-		// check transaction
-		for j, transaction := range tc.Input.Transactions {
-			if transaction != tc.Output.Transactions[j] {
-				if tc.Success {
-					t.Fatalf("test %d transaction mismatch", i)
-				}
-			}
-		}
-
-		// check events
-		for j, e := range tc.Input.Events {
-			if e != tc.Output.Events[j] {
-				if tc.Success {
-					t.Fatalf("test %d events mismatch", i)
-				}
-			}
-		}
+	// transactions
+	if len(s.Transactions) != 0 {
+		t.Errorf("Transactions should be empty (%v)", s.Transactions)
 	}
 }
