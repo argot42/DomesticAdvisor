@@ -13,6 +13,7 @@ type Stats struct {
 	Events       []Ev
 	Cache        Cache
 	LastCheck    time.Time
+	Index        uint
 }
 
 type Tr struct { // transactions
@@ -29,8 +30,10 @@ type Ev struct { // events
 	* after the date has passed this events gets deleted from the list and
 	* the information goes to a transaction */
 	Id          uint
-	Date        time.Time // date money will be added/subtracted
 	Name        string
+	Date        time.Time // date money will be added/subtracted
+	Times       int       // times this will repeat (-1 is indefinite)
+	Step        [3]int    // time step for the next repetition (if times is -1 this is ignored)
 	Amount      float64
 	Type        uint
 	Description string
@@ -70,6 +73,7 @@ func NewStats() Stats {
 			},
 		},
 		time.Now(),
+		0,
 	}
 }
 
@@ -110,17 +114,18 @@ func processInput(in []string, s *Stats) error {
 	return nil
 }
 
-func checkEvents(s *Stats) (nTrans int) {
+func checkEvents(s *Stats) (n int) {
 	now := time.Now()
-	nTrans = 0
+	remaining := make([]Ev, 0)
 
 	for _, event := range s.Events {
 		if now.Before(event.Date) {
+			remaining = append(remaining, event)
 			continue
 		}
 
 		newTr := Tr{
-			0, // gen id
+			s.Index,
 			event.Name,
 			event.Date,
 			event.Amount,
@@ -128,7 +133,27 @@ func checkEvents(s *Stats) (nTrans int) {
 			event.Description,
 		}
 		s.Transactions = append(s.Transactions, newTr)
-		nTrans++
+		s.Index++
+		n++
+
+		event.Times--
+
+		if event.Times > 0 {
+			remaining = append(remaining, Ev{
+				event.Id,
+				event.Name,
+				event.Date.AddDate(event.Step[0], event.Step[1], event.Step[2]),
+				event.Times,
+				event.Step,
+				event.Amount,
+				event.Type,
+				event.Description,
+			})
+		}
+	}
+
+	if len(remaining) < len(s.Events) {
+		s.Events = remaining
 	}
 
 	return
@@ -157,6 +182,7 @@ func updateCache(s *Stats) (err error) {
 	for _, tr := range s.Transactions {
 		total += tr.Amount
 	}
+
 	s.Cache.Treasury = total
 
 	return nil

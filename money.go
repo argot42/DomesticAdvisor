@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/argot42/money/config"
 	"github.com/argot42/money/stats"
@@ -8,7 +9,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -79,12 +79,12 @@ End:
 			}
 
 			// parse input
-			parsed, err := stats.Parse(strings.NewReader(string(buffer)))
+			parsed, err := stats.Parse(bytes.NewReader(buffer))
 			if err != nil {
 				return err
 			}
 
-			err := stats.Process(parsed, &s)
+			err = stats.Process(parsed, &s)
 			if err != nil {
 				return err
 			}
