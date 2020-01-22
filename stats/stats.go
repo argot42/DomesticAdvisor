@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -52,8 +54,10 @@ type Period struct {
 }
 
 // input commands names
-const INPUT string = "in"
-const PERIOD string = "pe"
+const (
+	INPUT  = "in"
+	PERIOD = "pe"
+)
 
 func NewStats() Stats {
 	return Stats{
@@ -188,13 +192,114 @@ func updateCache(s *Stats) (err error) {
 	return nil
 }
 
+// input name date amount type description
 func input(args []string, s *Stats) error {
-	// TODO
+	if len(args) < 5 {
+		return errors.New("inputcmd: missing arguments")
+	}
+
+	// index
+	index := s.Index
+	s.Index++
+
+	// name
+	name := args[0]
+
+	// parse date
+	date, err := time.Parse("2006-01-02", args[1])
+	if err != nil {
+		return err
+	}
+
+	// parse amount
+	amount, err := strconv.ParseFloat(args[2], 64)
+	if err != nil {
+		return err
+	}
+
+	// parse type
+	t, err := strconv.ParseUint(args[3], 10, 32)
+	if err != nil {
+		return err
+	}
+
+	// description
+	description := args[4]
+
+	s.Transactions = append(s.Transactions, Tr{
+		index,
+		name,
+		date,
+		amount,
+		uint(t),
+		description,
+	})
+
 	return nil
 }
 
+// period name date times year,month,day amount type description
 func period(args []string, s *Stats) error {
-	// TODO
+	if len(args) < 7 {
+		return errors.New("periodcmd: missing arguments")
+	}
+
+	// index
+	index := s.Index
+	s.Index++
+
+	// name
+	name := args[0]
+
+	// parse date
+	date, err := time.Parse("2006-01-02", args[1])
+	if err != nil {
+		return err
+	}
+
+	// parse times
+	times, err := strconv.ParseInt(args[2], 10, 32)
+	if err != nil {
+		return err
+	}
+
+	// parse step
+	var step [3]int
+
+	for i, stepStr := range strings.Split(args[3], ",") {
+		s, err := strconv.ParseInt(stepStr, 10, 32)
+		if err != nil {
+			return err
+		}
+
+		step[i] = int(s)
+	}
+
+	// parse amount
+	amount, err := strconv.ParseFloat(args[4], 64)
+	if err != nil {
+		return err
+	}
+
+	// parse type
+	t, err := strconv.ParseUint(args[5], 10, 32)
+	if err != nil {
+		return err
+	}
+
+	// description
+	description := args[6]
+
+	s.Events = append(s.Events, Ev{
+		index,
+		name,
+		date,
+		int(times),
+		step,
+		amount,
+		uint(t),
+		description,
+	})
 	return nil
 }
 

@@ -21,6 +21,13 @@ type UpdateCase struct {
 	Success bool
 }
 
+type ProcessCase struct {
+	Input    []string
+	InState  Stats
+	OutState Stats
+	Success  bool
+}
+
 func cmpStats(in Stats, out Stats) (err []string) {
 	// transactions check
 	if len(in.Transactions) == len(out.Transactions) {
@@ -292,17 +299,9 @@ func TestUpdate(t *testing.T) {
 				},
 				[]Ev{},
 				Cache{
-					0.0,
-					Period{
-						0.0,
-						0.0,
-						0.0,
-					},
-					Period{
-						0.0,
-						0.0,
-						0.0,
-					},
+					100.0,
+					Period{},
+					Period{},
 				},
 				time.Now(),
 				0,
@@ -320,17 +319,9 @@ func TestUpdate(t *testing.T) {
 				},
 				[]Ev{},
 				Cache{
-					0.0,
-					Period{
-						0.0,
-						0.0,
-						0.0,
-					},
-					Period{
-						0.0,
-						0.0,
-						0.0,
-					},
+					100.0,
+					Period{},
+					Period{},
 				},
 				time.Now(),
 				0,
@@ -373,16 +364,8 @@ func TestUpdate(t *testing.T) {
 				[]Ev{},
 				Cache{
 					100.0,
-					Period{
-						0.0,
-						0.0,
-						0.0,
-					},
-					Period{
-						0.0,
-						0.0,
-						0.0,
-					},
+					Period{},
+					Period{},
 				},
 				time.Now(),
 				1,
@@ -453,16 +436,8 @@ func TestUpdate(t *testing.T) {
 				},
 				Cache{
 					300.0,
-					Period{
-						0.0,
-						0.0,
-						0.0,
-					},
-					Period{
-						0.0,
-						0.0,
-						0.0,
-					},
+					Period{},
+					Period{},
 				},
 				time.Now(),
 				2,
@@ -484,6 +459,195 @@ func TestUpdate(t *testing.T) {
 		}
 
 		for _, errs := range cmpStats(tc.Input, tc.Output) {
+			t.Errorf("TC %d -> %s", i, errs)
+		}
+	}
+}
+
+func TestProcess(t *testing.T) {
+	base := NewStats()
+
+	testCases := []ProcessCase{
+		/* tc 0 */
+		ProcessCase{
+			[]string{
+				INPUT,
+				"foo",
+				"2020-01-01",
+				"100.02",
+				"0",
+				"bar",
+			},
+			base,
+			Stats{
+				[]Tr{
+					Tr{
+						0,
+						"foo",
+						time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
+						100.02,
+						0,
+						"bar",
+					},
+				},
+				[]Ev{},
+				Cache{
+					100.02,
+					Period{},
+					Period{},
+				},
+				base.LastCheck,
+				1,
+			},
+			true,
+		},
+		/* **** */
+
+		/* tc 1 */
+		ProcessCase{
+			[]string{
+				PERIOD,
+				"foo",
+				"2020-01-02",
+				"-1",
+				"0,0,0",
+				"20",
+				"0",
+				"bar",
+			},
+			base,
+			Stats{
+				[]Tr{},
+				[]Ev{
+					Ev{
+						0,
+						"foo",
+						time.Date(2020, time.January, 2, 0, 0, 0, 0, time.UTC),
+						-1,
+						[3]int{0, 0, 0},
+						20,
+						0,
+						"bar",
+					},
+				},
+				Cache{},
+				base.LastCheck,
+				1,
+			},
+			true,
+		},
+		/* **** */
+
+		/* tc 2 */
+		ProcessCase{
+			[]string{
+				PERIOD,
+				"foo",
+				"2019-05-19",
+				"-1",
+				"0,0,1",
+				"20",
+				"0",
+				"bar",
+			},
+			Stats{
+				[]Tr{
+					Tr{
+						0,
+						"foo0",
+						time.Date(2020, time.January, 2, 0, 0, 0, 0, time.UTC),
+						10.0,
+						0,
+						"bar0",
+					},
+					Tr{
+						1,
+						"foo1",
+						time.Date(2020, time.January, 3, 0, 0, 0, 0, time.UTC),
+						10.1,
+						0,
+						"bar1",
+					},
+				},
+				[]Ev{
+					Ev{
+						2,
+						"foo2",
+						time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
+						1,
+						[3]int{0, 0, 1},
+						30.5,
+						0,
+						"bar2",
+					},
+				},
+				Cache{},
+				time.Now(),
+				3,
+			},
+			Stats{
+				[]Tr{
+					Tr{
+						0,
+						"foo0",
+						time.Date(2020, time.January, 2, 0, 0, 0, 0, time.UTC),
+						10.0,
+						0,
+						"bar0",
+					},
+					Tr{
+						1,
+						"foo1",
+						time.Date(2020, time.January, 3, 0, 0, 0, 0, time.UTC),
+						10.1,
+						0,
+						"bar1",
+					},
+					Tr{
+						3,
+						"foo2",
+						time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
+						30.5,
+						0,
+						"bar2",
+					},
+				},
+				[]Ev{
+					Ev{
+						4,
+						"foo",
+						time.Date(2019, time.May, 19, 0, 0, 0, 0, time.UTC),
+						-1,
+						[3]int{0, 0, 1},
+						20,
+						0,
+						"bar",
+					},
+				},
+				Cache{
+					50.6,
+					Period{},
+					Period{},
+				},
+				time.Now(),
+				5,
+			},
+			true,
+		},
+		/* **** */
+	}
+
+	for i, tc := range testCases {
+		err := Process(tc.Input, &tc.InState)
+
+		if err != nil {
+			if tc.Success {
+				t.Fatalf("TC %d returned with error %s", i, err)
+			}
+			return
+		}
+
+		for _, errs := range cmpStats(tc.InState, tc.OutState) {
 			t.Errorf("TC %d -> %s", i, errs)
 		}
 	}
