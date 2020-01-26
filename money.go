@@ -22,7 +22,6 @@ func main() {
 		}
 		log.Fatalln("config:", err)
 	}
-
 	ctl, status, err := setupFiles(cfg)
 	if err != nil {
 		log.Fatalln(err)
@@ -34,7 +33,7 @@ func main() {
 
 	err = start(ctl, status, cfg.Timeout, sigs)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalln("start:", err)
 	}
 
 	// cleaning

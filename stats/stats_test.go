@@ -28,6 +28,11 @@ type ProcessCase struct {
 	Success  bool
 }
 
+type OutputCase struct {
+	Input  Stats
+	Output string
+}
+
 func cmpStats(in Stats, out Stats) (err []string) {
 	// transactions check
 	if len(in.Transactions) == len(out.Transactions) {
@@ -225,17 +230,23 @@ func TestParse(t *testing.T) {
 }
 
 func TestOutput(t *testing.T) {
-	s := NewStats()
 	var out strings.Builder
+	s := NewStats()
+	sout, _ := json.Marshal(s.Cache)
 
-	Output(&out, s)
+	testCases := []OutputCase{
+		OutputCase{
+			s,
+			string(sout),
+		},
+	}
 
-	outStr := out.String()
-	j, _ := json.Marshal(s.Cache)
-	expectedStr := string(j)
+	for _, tc := range testCases {
+		Output(&out, s)
 
-	if outStr != expectedStr {
-		t.Fatalf("expected: %s | got %s", expectedStr, outStr)
+		if out.String() != tc.Output {
+			t.Fatalf("expected: %s | got %s", tc.Output, out.String())
+		}
 	}
 }
 
@@ -580,10 +591,20 @@ func TestProcess(t *testing.T) {
 						0,
 						"bar2",
 					},
+					Ev{
+						3,
+						"foo3",
+						time.Now().AddDate(1, 0, 0),
+						1,
+						[3]int{0, 0, 1},
+						1000,
+						0,
+						"bar3",
+					},
 				},
 				Cache{},
 				time.Now(),
-				3,
+				4,
 			},
 			Stats{
 				[]Tr{
@@ -604,7 +625,7 @@ func TestProcess(t *testing.T) {
 						"bar1",
 					},
 					Tr{
-						3,
+						4,
 						"foo2",
 						time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
 						30.5,
@@ -614,7 +635,17 @@ func TestProcess(t *testing.T) {
 				},
 				[]Ev{
 					Ev{
-						4,
+						3,
+						"foo3",
+						time.Now().AddDate(1, 0, 0),
+						1,
+						[3]int{0, 0, 1},
+						1000,
+						0,
+						"bar3",
+					},
+					Ev{
+						5,
 						"foo",
 						time.Date(2019, time.May, 19, 0, 0, 0, 0, time.UTC),
 						-1,
@@ -630,9 +661,29 @@ func TestProcess(t *testing.T) {
 					Period{},
 				},
 				time.Now(),
-				5,
+				6,
 			},
 			true,
+		},
+		/* **** */
+
+		/* tc 3 */
+		ProcessCase{
+			[]string{
+				"foo",
+			},
+			Stats{},
+			Stats{},
+			false,
+		},
+		/* **** */
+
+		/* tc 4 */
+		ProcessCase{
+			[]string{},
+			Stats{},
+			Stats{},
+			false,
 		},
 		/* **** */
 	}
@@ -644,7 +695,7 @@ func TestProcess(t *testing.T) {
 			if tc.Success {
 				t.Fatalf("TC %d returned with error %s", i, err)
 			}
-			return
+			continue
 		}
 
 		for _, errs := range cmpStats(tc.InState, tc.OutState) {
