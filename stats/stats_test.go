@@ -3,6 +3,7 @@ package stats
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/argot42/memws"
 	"io"
 	"strings"
 	"testing"
@@ -230,7 +231,8 @@ func TestParse(t *testing.T) {
 }
 
 func TestOutput(t *testing.T) {
-	var out strings.Builder
+	out := memws.WriteSeek{}
+
 	s := NewStats()
 	sout, _ := json.Marshal(s.Cache)
 
@@ -245,7 +247,7 @@ func TestOutput(t *testing.T) {
 		Output(&out, s)
 
 		if out.String() != tc.Output {
-			t.Fatalf("expected: %s | got %s", tc.Output, out.String())
+			t.Fatalf("expected: %s | got %s", tc.Output, out)
 		}
 	}
 }

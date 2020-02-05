@@ -33,7 +33,7 @@ func main() {
 
 	err = start(ctl, status, cfg.Timeout, sigs)
 	if err != nil {
-		log.Fatalln("start:", err)
+		log.Fatalln(err)
 	}
 
 	// cleaning
@@ -80,16 +80,16 @@ End:
 			// parse input
 			parsed, err := stats.Parse(bytes.NewReader(buffer))
 			if err != nil {
-				return err
+				return fmt.Errorf("parse: %s", err)
 			}
 
 			err = stats.Process(parsed, &s)
 			if err != nil {
-				return err
+				return fmt.Errorf("stats: %s", err)
 			}
 			err = stats.Output(status, s)
 			if err != nil {
-				return err
+				return fmt.Errorf("output: %s", err)
 			}
 			buffer = nil
 

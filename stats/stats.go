@@ -303,12 +303,18 @@ func period(args []string, s *Stats) error {
 	return nil
 }
 
-func Output(out io.Writer, s Stats) error {
+func Output(out io.WriteSeeker, s Stats) error {
 	encoded, err := json.Marshal(s.Cache)
 	if err != nil {
 		return err
 	}
 
 	_, err = out.Write(encoded)
+	if err != nil {
+		return err
+	}
+
+	_, err = out.Seek(0, 0)
+
 	return err
 }
