@@ -1,7 +1,10 @@
 package stats
 
 import (
+	"fmt"
 	"io"
+	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -30,6 +33,11 @@ type BuildStatsCase struct {
 	EvInput []Event
 	Output  Stats
 	Success bool
+}
+
+type UpdateStatsCase struct {
+	Input  Stats
+	Output string
 }
 
 func TestParse(t *testing.T) {
@@ -485,4 +493,77 @@ func checkActivity(a0, a1 Activity, success bool, name string, i int, t *testing
 	}
 
 	return failed
+}
+
+func TestUpdateStats(t *testing.T) {
+	usc := []UpdateStatsCase{
+		UpdateStatsCase{
+			Stats{
+				Activity{
+					100.4,
+					[]Entry{
+						Entry{
+							"foo",
+							100.4,
+							time.Date(2020, 01, 01, 0, 0, 0, 0, time.UTC),
+						},
+					},
+				},
+				Activity{},
+				Activity{},
+				0,
+			},
+			"{\"Treasury\":{\"Total\":100.4,\"Entries\":[{\"Name\":\"foo\",\"Amount\":100.4,\"Date\":\"2020-01-01T00:00:00Z\"}]},\"Income\":{\"Total\":0,\"Entries\":null},\"Expenses\":{\"Total\":0,\"Entries\":null},\"Balance\":0}",
+		},
+	}
+
+	for i, c := range usc {
+		// create temporal file
+		tmp, err := ioutil.TempFile("", fmt.Sprintf("%d_update-stats_", i))
+		if err != nil {
+			t.Fatalf("Tmp file: %s", err)
+		}
+
+		// write to file
+		err = UpdateStats(c.Input, tmp)
+		if err != nil {
+			t.Errorf("%d failed: %s", i, err)
+		}
+
+		fileName := tmp.Name()
+
+		// close writing file
+		if err = tmp.Close(); err != nil {
+			t.Errorf("%d closing %s: %s", i, fileName, err)
+		}
+
+		// open same file for reading
+		readTmp, err := os.Open(fileName)
+		if err != nil {
+			t.Errorf("%d opening %s: %s", i, fileName, err)
+			continue
+		}
+
+		// read all file
+		content, err := ioutil.ReadAll(readTmp)
+		if err != nil {
+			t.Errorf("%d reading %s: %s", i, fileName, err)
+			continue
+		}
+
+		// compare content with output
+		if string(content) != c.Output {
+			t.Errorf("%d got %s but should be %s", i, string(content), c.Output)
+		}
+
+		// close file for reading
+		if err = readTmp.Close(); err != nil {
+			t.Errorf("%d reading file close %s: %s", i, fileName, err)
+		}
+
+		// remove file
+		if err = os.Remove(fileName); err != nil {
+			t.Errorf("%d removing file %s: %s", i, fileName, err)
+		}
+	}
 }
