@@ -3,318 +3,210 @@ package stats
 import (
 	"encoding/csv"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 )
 
+var TRINDEX uint
+var EVINDEX uint
+
+/* -- output -- */
 type Stats struct {
-	Transactions []Tr
-	Events       []Ev
-	Cache        Cache
-	LastCheck    time.Time
-	Index        uint
+	Treasury Activity
+	Income   Activity
+	Expenses Activity
+	Balance  float64
 }
 
-type Tr struct { // transactions
+type Activity struct {
+	Total   float64
+	Entries []Entry
+}
+
+type Entry struct {
+	Name   string
+	Amount float64
+	Date   time.Time
+}
+
+/* -------------- */
+
+/* -- state -- */
+type Transaction struct {
 	Id          uint
 	Name        string
-	Date        time.Time // date the money was added/subtracted
-	Amount      float64
-	Type        uint
 	Description string
+	Date        time.Time
+	Amount      float64
 }
 
-type Ev struct { // events
-	/* Events are money movements that will happen in the future
-	* after the date has passed this events gets deleted from the list and
-	* the information goes to a transaction */
+type Event struct {
 	Id          uint
 	Name        string
-	Date        time.Time // date money will be added/subtracted
-	Times       int       // times this will repeat (-1 is indefinite)
-	Step        [3]int    // time step for the next repetition (if times is -1 this is ignored)
-	Amount      float64
-	Type        uint
 	Description string
+	Date        time.Time // date the amount will be added/subtracted
+	Times       int       // times this event will repeat (-1 is indefinite)
+	Step        [3]int    // time step for next repetition (if times is 0 this is ignored)
+	Amount      float64
 }
 
-type Cache struct {
-	Treasury float64
-	Month    Period
-	Year     Period
-}
+/* -------------- */
 
-type Period struct {
-	Total    float64
-	Income   float64
-	Expenses float64
-}
-
-// input commands names
-const (
-	INPUT  = "in"
-	PERIOD = "pe"
-)
-
-func NewStats() Stats {
-	return Stats{
-		[]Tr{},
-		[]Ev{},
-		Cache{
-			0.0,
-			Period{
-				0.0,
-				0.0,
-				0.0,
-			},
-			Period{
-				0.0,
-				0.0,
-				0.0,
-			},
-		},
-		time.Now(),
-		0,
-	}
-}
-
-func Parse(in io.Reader) (out []string, err error) {
+func Parse(in io.Reader) ([]string, error) {
 	r := csv.NewReader(in)
 	r.Comma = ' '
 
 	return r.Read()
 }
 
-func Update(s *Stats) error {
-	return processInput(nil, s)
-}
-
-func Process(in []string, s *Stats) error {
-	return processInput(in, s)
-}
-
-func processInput(in []string, s *Stats) error {
-	nTrans := checkEvents(s)
-
-	if in != nil {
-		err := runCmd(in, s)
-		if err != nil {
-			return err
-		}
-	}
-
-	if nTrans > 0 || in != nil {
-		err := updateCache(s)
-		if err != nil {
-			return err
-		}
-	}
-
-	s.LastCheck = time.Now()
-
-	return nil
-}
-
-func checkEvents(s *Stats) (n int) {
-	now := time.Now()
-	remaining := make([]Ev, 0)
-
-	for _, event := range s.Events {
-		if now.Before(event.Date) {
-			remaining = append(remaining, event)
-			continue
-		}
-
-		newTr := Tr{
-			s.Index,
-			event.Name,
-			event.Date,
-			event.Amount,
-			event.Type,
-			event.Description,
-		}
-		s.Transactions = append(s.Transactions, newTr)
-		s.Index++
-		n++
-
-		event.Times--
-
-		if event.Times > 0 {
-			remaining = append(remaining, Ev{
-				event.Id,
-				event.Name,
-				event.Date.AddDate(event.Step[0], event.Step[1], event.Step[2]),
-				event.Times,
-				event.Step,
-				event.Amount,
-				event.Type,
-				event.Description,
-			})
-		}
-	}
-
-	if len(remaining) < len(s.Events) {
-		s.Events = remaining
-	}
-
-	return
-}
-
-func runCmd(in []string, s *Stats) (err error) {
-	if len(in) < 1 {
-		return errors.New("no command")
-	}
-
-	switch in[0] {
-	case INPUT:
-		err = input(in[1:], s)
-	case PERIOD:
-		err = period(in[1:], s)
-	default:
-		return errors.New("invalid command")
-	}
-
-	return
-}
-
-func updateCache(s *Stats) (err error) {
-	total := 0.0
-
-	for _, tr := range s.Transactions {
-		total += tr.Amount
-	}
-
-	s.Cache.Treasury = total
-
-	return nil
-}
-
-// input name date amount type description
-func input(args []string, s *Stats) error {
-	if len(args) < 5 {
-		return errors.New("inputcmd: missing arguments")
+func ProcessTransaction(in []string) (Transaction, error) {
+	if len(in) < 5 {
+		return Transaction{}, fmt.Errorf("process transaction: missing arguments")
 	}
 
 	// index
-	index := s.Index
-	s.Index++
+	index := TRINDEX
+	TRINDEX++
 
 	// name
-	name := args[0]
+	name := in[1]
+
+	// description
+	description := in[2]
 
 	// parse date
-	date, err := time.Parse("2006-01-02", args[1])
+	date, err := time.Parse("2006-01-02", in[3])
 	if err != nil {
-		return err
+		return Transaction{}, fmt.Errorf("process transaction: %s", err)
 	}
 
 	// parse amount
-	amount, err := strconv.ParseFloat(args[2], 64)
+	amount, err := strconv.ParseFloat(in[4], 64)
 	if err != nil {
-		return err
+		return Transaction{}, fmt.Errorf("process transaction: %s", err)
 	}
 
-	// parse type
-	t, err := strconv.ParseUint(args[3], 10, 32)
-	if err != nil {
-		return err
-	}
-
-	// description
-	description := args[4]
-
-	s.Transactions = append(s.Transactions, Tr{
+	return Transaction{
 		index,
 		name,
+		description,
 		date,
 		amount,
-		uint(t),
-		description,
-	})
-
-	return nil
+	}, nil
 }
 
-// period name date times year,month,day amount type description
-func period(args []string, s *Stats) error {
-	if len(args) < 7 {
-		return errors.New("periodcmd: missing arguments")
+func ProcessEvent(in []string) (Event, error) {
+	if len(in) < 7 {
+		return Event{}, fmt.Errorf("process event: missing arguments")
 	}
 
 	// index
-	index := s.Index
-	s.Index++
+	index := EVINDEX
+	EVINDEX++
 
 	// name
-	name := args[0]
+	name := in[1]
+
+	// description
+	description := in[2]
 
 	// parse date
-	date, err := time.Parse("2006-01-02", args[1])
+	date, err := time.Parse("2006-01-02", in[3])
 	if err != nil {
-		return err
+		return Event{}, fmt.Errorf("process event: %s", err)
 	}
 
 	// parse times
-	times, err := strconv.ParseInt(args[2], 10, 32)
+	times, err := strconv.ParseInt(in[4], 10, 32)
 	if err != nil {
-		return err
+		return Event{}, fmt.Errorf("process event: %s", err)
 	}
 
 	// parse step
 	var step [3]int
 
-	for i, stepStr := range strings.Split(args[3], ",") {
+	for i, stepStr := range strings.Split(in[5], ",") {
 		s, err := strconv.ParseInt(stepStr, 10, 32)
 		if err != nil {
-			return err
+			return Event{}, fmt.Errorf("process event: %s", err)
 		}
 
 		step[i] = int(s)
 	}
 
 	// parse amount
-	amount, err := strconv.ParseFloat(args[4], 64)
+	amount, err := strconv.ParseFloat(in[6], 64)
 	if err != nil {
-		return err
+		return Event{}, fmt.Errorf("process event: %s", err)
 	}
 
-	// parse type
-	t, err := strconv.ParseUint(args[5], 10, 32)
-	if err != nil {
-		return err
-	}
-
-	// description
-	description := args[6]
-
-	s.Events = append(s.Events, Ev{
+	return Event{
 		index,
 		name,
+		description,
 		date,
 		int(times),
 		step,
 		amount,
-		uint(t),
-		description,
-	})
-	return nil
+	}, nil
 }
 
-func Output(out io.WriteSeeker, s Stats) error {
-	encoded, err := json.Marshal(s.Cache)
+func BuildStats(Transactions []Transaction, Events []Event) (stats Stats) {
+	for _, tr := range Transactions {
+		stats.Treasury.Total += tr.Amount
+		stats.Treasury.Entries = append(stats.Treasury.Entries, Entry{
+			tr.Name,
+			tr.Amount,
+			tr.Date,
+		})
+	}
+
+	for _, ev := range Events {
+		if !inMonth(ev.Date, time.Now()) {
+			continue
+		}
+
+		stats.Balance += ev.Amount
+
+		if ev.Amount >= 0 {
+			stats.Income.Total += ev.Amount
+			stats.Income.Entries = append(stats.Income.Entries, Entry{
+				ev.Name,
+				ev.Amount,
+				ev.Date,
+			})
+		} else {
+			stats.Expenses.Total += ev.Amount
+			stats.Expenses.Entries = append(stats.Expenses.Entries, Entry{
+				ev.Name,
+				ev.Amount,
+				ev.Date,
+			})
+		}
+	}
+
+	return
+}
+
+func inMonth(d, month time.Time) bool {
+	return d.Year() == month.Year() && d.Month() == month.Month()
+}
+
+func UpdateStats(s Stats, f *os.File) error {
+	j, err := json.Marshal(s)
 	if err != nil {
 		return err
 	}
 
-	_, err = out.Write(encoded)
-	if err != nil {
+	f.Truncate(0)
+	f.Seek(0, 0)
+	if _, err := f.Write(j); err != nil {
 		return err
 	}
 
-	_, err = out.Seek(0, 0)
-
-	return err
+	return nil
 }

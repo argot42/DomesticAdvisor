@@ -3,8 +3,8 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"github.com/argot42/money/config"
-	"github.com/argot42/money/stats"
+	"github.com/argot42/DomesticAdvisor/config"
+	"github.com/argot42/DomesticAdvisor/stats"
 	"github.com/argot42/watcher"
 	"log"
 	"os"

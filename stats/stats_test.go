@@ -1,9 +1,6 @@
 package stats
 
 import (
-	"encoding/json"
-	"fmt"
-	"github.com/argot42/memws"
 	"io"
 	"strings"
 	"testing"
@@ -16,162 +13,23 @@ type ParseCase struct {
 	Success bool
 }
 
-type UpdateCase struct {
-	Input   Stats
-	Output  Stats
+type ProcessTransactionCase struct {
+	Input   []string
+	Output  Transaction
 	Success bool
 }
 
-type ProcessCase struct {
-	Input    []string
-	InState  Stats
-	OutState Stats
-	Success  bool
+type ProcessEventCase struct {
+	Input   []string
+	Output  Event
+	Success bool
 }
 
-type OutputCase struct {
-	Input  Stats
-	Output string
-}
-
-func cmpStats(in Stats, out Stats) (err []string) {
-	// transactions check
-	if len(in.Transactions) == len(out.Transactions) {
-		for i := 0; i < len(in.Transactions); i++ {
-			err = append(err, cmpTr(in.Transactions[i], out.Transactions[i])...)
-		}
-
-	} else if len(in.Transactions) > len(out.Transactions) {
-		err = append(err, fmt.Sprintf("Transaction slice size mismatch (%v > %v)", in.Transactions, out.Transactions))
-
-	} else {
-		err = append(err, fmt.Sprintf("Transactions slice size mismatch (%v < %v)", in.Transactions, out.Transactions))
-	}
-
-	// events check
-	if len(in.Events) == len(out.Events) {
-		for i := 0; i < len(in.Events); i++ {
-			err = append(err, cmpEv(in.Events[i], out.Events[i])...)
-		}
-
-	} else if len(in.Events) > len(out.Events) {
-		err = append(err, fmt.Sprintf("Events slice size mismatch (%v > %v)", in.Events, out.Events))
-	} else {
-		err = append(err, fmt.Sprintf("Events slice size mismatch (%v < %v)", in.Events, out.Events))
-	}
-
-	// cache check
-	err = append(err, cmpCache(in.Cache, out.Cache)...)
-
-	// last check check
-	if !in.LastCheck.Truncate(24 * time.Hour).Equal(out.LastCheck.Truncate(24 * time.Hour)) {
-		err = append(err, fmt.Sprintf("Last check mismatch (%s should be %s)", in.LastCheck, out.LastCheck))
-	}
-
-	// index check
-	if in.Index != out.Index {
-		err = append(err, fmt.Sprintf("Index mismatch (%d should be %d)", in.Index, out.Index))
-	}
-
-	return
-}
-
-func cmpTr(in Tr, out Tr) (err []string) {
-	// Id check
-	if in.Id != out.Id {
-		err = append(err, fmt.Sprintf("Tr Id mismatch (%d should be %d)", in.Id, out.Id))
-	}
-
-	// name check
-	if in.Name != out.Name {
-		err = append(err, fmt.Sprintf("Tr Name mismatch (%s should be %s)", in.Name, out.Name))
-	}
-
-	// date check
-	if !in.Date.Truncate(24 * time.Hour).Equal(out.Date.Truncate(24 * time.Hour)) {
-		err = append(err, fmt.Sprintf("Tr Date mismatch (%s should be %s)", in.Date, out.Date))
-	}
-
-	// amount check
-	if in.Amount != out.Amount {
-		err = append(err, fmt.Sprintf("Tr Amount mismatch (%f should be %f)", in.Amount, out.Amount))
-	}
-
-	// type check
-	if in.Type != out.Type {
-		err = append(err, fmt.Sprintf("Tr Type mismatch (%d should be %d)", in.Type, out.Type))
-	}
-
-	// description check
-	if in.Description != out.Description {
-		err = append(err, fmt.Sprintf("Tr Description mismatch (%s should be %s)", in.Description, out.Description))
-	}
-
-	return
-}
-
-func cmpEv(in Ev, out Ev) (err []string) {
-	// Id check
-	if in.Id != out.Id {
-		err = append(err, fmt.Sprintf("Ev Id mismatch (%d should be %d)", in.Id, out.Id))
-	}
-
-	// date check
-	if !in.Date.Truncate(24 * time.Hour).Equal(out.Date.Truncate(24 * time.Hour)) {
-		err = append(err, fmt.Sprintf("Ev Date mismatch (%s should be %s)", in.Date, out.Date))
-	}
-
-	// name check
-	if in.Name != out.Name {
-		err = append(err, fmt.Sprintf("Ev Name mismatch (%s should be %s)", in.Name, out.Name))
-	}
-
-	// amount check
-	if in.Amount != out.Amount {
-		err = append(err, fmt.Sprintf("Ev Amount mismatch (%f should be %f)", in.Amount, out.Amount))
-	}
-
-	// type check
-	if in.Type != out.Type {
-		err = append(err, fmt.Sprintf("Ev Type mismatch (%d should be %d)", in.Type, out.Type))
-	}
-
-	// description check
-	if in.Description != out.Description {
-		err = append(err, fmt.Sprintf("Ev Description mismatch (%s should be %s)", in.Description, out.Description))
-	}
-
-	return
-}
-
-func cmpCache(in Cache, out Cache) (err []string) {
-	if in.Treasury != out.Treasury {
-		err = append(err, fmt.Sprintf("Treasury mismatch (%f should be %f)", in.Treasury, out.Treasury))
-	}
-
-	err = append(err, cmpPeriod(in.Month, out.Month)...)
-	err = append(err, cmpPeriod(in.Year, out.Year)...)
-
-	return
-}
-
-func cmpPeriod(in Period, out Period) (err []string) {
-	// expenses check
-	if in.Expenses != out.Expenses {
-		err = append(err, fmt.Sprintf("Expenses mismatch (%f should be %f)", in.Expenses, out.Expenses))
-	}
-
-	// income check
-	if in.Income != out.Income {
-		err = append(err, fmt.Sprintf("Income mismatch (%f should be %f)", in.Income, out.Income))
-	}
-
-	// total check
-	if in.Total != out.Total {
-		err = append(err, fmt.Sprintf("Total mismatch (%f should be %f)", in.Total, out.Total))
-	}
-
-	return
+type BuildStatsCase struct {
+	TrInput []Transaction
+	EvInput []Event
+	Output  Stats
+	Success bool
 }
 
 func TestParse(t *testing.T) {
@@ -230,478 +88,401 @@ func TestParse(t *testing.T) {
 	}
 }
 
-func TestOutput(t *testing.T) {
-	out := memws.WriteSeek{}
-
-	s := NewStats()
-	sout, _ := json.Marshal(s.Cache)
-
-	testCases := []OutputCase{
-		OutputCase{
-			s,
-			string(sout),
+func TestProcessTransaction(t *testing.T) {
+	ptc := []ProcessTransactionCase{
+		ProcessTransactionCase{
+			[]string{"Tr", "foo", "bar", "2020-01-01", "100"},
+			Transaction{
+				0,
+				"foo",
+				"bar",
+				time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+				100,
+			},
+			true,
+		},
+		ProcessTransactionCase{
+			[]string{"Tr", "", "", "2021-02-03", "30.10"},
+			Transaction{
+				1,
+				"",
+				"",
+				time.Date(2021, 2, 3, 0, 0, 0, 0, time.UTC),
+				30.10,
+			},
+			true,
+		},
+		ProcessTransactionCase{
+			[]string{"Tr"},
+			Transaction{},
+			false,
+		},
+		ProcessTransactionCase{
+			[]string{"foo", "bar", "2020-01-01", "200"},
+			Transaction{},
+			false,
+		},
+		ProcessTransactionCase{
+			[]string{"Tr", "x", "x", "a", "b"},
+			Transaction{},
+			false,
+		},
+		ProcessTransactionCase{
+			[]string{"", "", "", "", "", "", "", "", ""},
+			Transaction{},
+			false,
 		},
 	}
 
-	for _, tc := range testCases {
-		Output(&out, s)
+	for i, c := range ptc {
+		failed := false
+		tr, err := ProcessTransaction(c.Input)
 
-		if out.String() != tc.Output {
-			t.Fatalf("expected: %s | got %s", tc.Output, out)
+		if err != nil {
+			failed = true
+			if c.Success {
+				t.Errorf("%d: failed %s\n", i, err)
+				continue
+			}
+		}
+
+		if tr.Id != c.Output.Id {
+			failed = true
+			if c.Success {
+				t.Errorf("%d: Id -> %d and should be %d", i, tr.Id, c.Output.Id)
+			}
+		}
+
+		if tr.Name != c.Output.Name {
+			failed = true
+			if c.Success {
+				t.Errorf("%d: Name -> %s and should be %s", i, tr.Name, c.Output.Name)
+			}
+		}
+
+		if tr.Description != c.Output.Description {
+			failed = true
+			if c.Success {
+				t.Errorf("%d: Description -> %s and should be %s", i, tr.Description, c.Output.Description)
+			}
+		}
+
+		if !tr.Date.Equal(c.Output.Date) {
+			failed = true
+			if c.Success {
+				t.Errorf("%d: Date -> %s and should be %s", i, tr.Date, c.Output.Date)
+			}
+		}
+
+		if tr.Amount != c.Output.Amount {
+			failed = true
+			if c.Success {
+				t.Errorf("%d: Amount -> %f and should be %f", i, tr.Amount, c.Output.Amount)
+			}
+		}
+
+		if !c.Success && !failed {
+			t.Errorf("%d: should have failed but it did not", i)
 		}
 	}
 }
 
-func TestNewStats(t *testing.T) {
-	now := time.Now()
-
-	in := NewStats()
-	in.LastCheck = now
-
-	out := Stats{
-		[]Tr{},
-		[]Ev{},
-		Cache{
-			0.0,
-			Period{
-				0.0,
-				0.0,
-				0.0,
-			},
-			Period{
-				0.0,
-				0.0,
-				0.0,
-			},
-		},
-		now,
-		0,
-	}
-
-	errs := cmpStats(in, out)
-
-	for _, err := range errs {
-		t.Error(err)
-	}
-}
-
-func TestUpdate(t *testing.T) {
-	now := time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC)
-
-	testCases := []UpdateCase{
-		/* tc 0 */
-		UpdateCase{
-			NewStats(),
-			NewStats(),
-			true,
-		},
-		/* ********** */
-
-		/* tc 1 */
-		UpdateCase{
-			Stats{
-				[]Tr{
-					Tr{
-						0,
-						"foo",
-						time.Now(),
-						100.0,
-						0,
-						"bar",
-					},
-				},
-				[]Ev{},
-				Cache{
-					100.0,
-					Period{},
-					Period{},
-				},
-				time.Now(),
+func TestProcessEvent(t *testing.T) {
+	tpe := []ProcessEventCase{
+		ProcessEventCase{
+			[]string{"Ev", "foo", "bar", "2020-10-10", "-1", "0,0,0", "2020"},
+			Event{
 				0,
-			},
-			Stats{
-				[]Tr{
-					Tr{
-						0,
-						"foo",
-						time.Now(),
-						100.0,
-						0,
-						"bar",
-					},
-				},
-				[]Ev{},
-				Cache{
-					100.0,
-					Period{},
-					Period{},
-				},
-				time.Now(),
-				0,
+				"foo",
+				"bar",
+				time.Date(2020, 10, 10, 0, 0, 0, 0, time.UTC),
+				-1,
+				[3]int{0, 0, 0},
+				2020,
 			},
 			true,
 		},
-		/* ********** */
-
-		/* tc 2 */
-		UpdateCase{
-			Stats{
-				[]Tr{},
-				[]Ev{
-					Ev{
-						0,
-						"foo",
-						now,
-						1,
-						[3]int{0, 0, 1},
-						100.0,
-						0,
-						"bar",
-					},
-				},
-				Cache{},
-				time.Now(),
-				0,
-			},
-			Stats{
-				[]Tr{
-					Tr{
-						0,
-						"foo",
-						now,
-						100.0,
-						0,
-						"bar",
-					},
-				},
-				[]Ev{},
-				Cache{
-					100.0,
-					Period{},
-					Period{},
-				},
-				time.Now(),
+		ProcessEventCase{
+			[]string{"Ev", "", "", "2100-01-02", "10", "1,2,3", "2"},
+			Event{
 				1,
-			},
-			true,
-		},
-		/* ********** */
-
-		/* tc 3 */
-		UpdateCase{
-			Stats{
-				[]Tr{
-					Tr{
-						0,
-						"test",
-						time.Date(2019, 12, 12, 0, 0, 0, 0, time.UTC),
-						200.0,
-						0,
-						"test",
-					},
-				},
-				[]Ev{
-					Ev{
-						1,
-						"foo",
-						now,
-						2,
-						[3]int{0, 0, 1},
-						100.0,
-						0,
-						"bar",
-					},
-				},
-				Cache{},
-				time.Now(),
-				1,
-			},
-			Stats{
-				[]Tr{
-					Tr{
-						0,
-						"test",
-						time.Date(2019, 12, 12, 0, 0, 0, 0, time.UTC),
-						200.0,
-						0,
-						"test",
-					},
-					Tr{
-						1,
-						"foo",
-						now,
-						100.0,
-						0,
-						"bar",
-					},
-				},
-				[]Ev{
-					Ev{
-						1,
-						"foo",
-						now,
-						1,
-						[3]int{0, 0, 1},
-						100.0,
-						0,
-						"bar",
-					},
-				},
-				Cache{
-					300.0,
-					Period{},
-					Period{},
-				},
-				time.Now(),
+				"",
+				"",
+				time.Date(2100, 1, 2, 0, 0, 0, 0, time.UTC),
+				10,
+				[3]int{1, 2, 3},
 				2,
 			},
 			true,
 		},
-		/* ********** */
+		ProcessEventCase{
+			[]string{"", "", "", "", "", "", ""},
+			Event{},
+			false,
+		},
+		ProcessEventCase{
+			[]string{"Ev", "", "", "", "10", "1,2,0", "100"},
+			Event{},
+			false,
+		},
 	}
 
-	for i, tc := range testCases {
-		err := Update(&tc.Input)
+	for i, c := range tpe {
+		failed := false
+		ev, err := ProcessEvent(c.Input)
 
 		if err != nil {
-			if tc.Success {
-				t.Fatalf("TC %d returned with error %s", i, err)
+			failed = true
+			if c.Success {
+				t.Errorf("%d: failed: %s", i, err)
+				continue
 			}
-
-			return
 		}
 
-		for _, errs := range cmpStats(tc.Input, tc.Output) {
-			t.Errorf("TC %d -> %s", i, errs)
+		if ev.Id != c.Output.Id {
+			failed = true
+			if c.Success {
+				t.Errorf("%d: Id -> %d should be %d", i, ev.Id, c.Output.Id)
+			}
+		}
+
+		if ev.Name != c.Output.Name {
+			failed = true
+			if c.Success {
+				t.Errorf("%d: Name -> %s should be %s", i, ev.Name, c.Output.Name)
+			}
+		}
+
+		if ev.Description != c.Output.Description {
+			failed = true
+			if c.Success {
+				t.Errorf("%d: Description -> %s should be %s", i, ev.Description, c.Output.Description)
+			}
+		}
+
+		if !ev.Date.Equal(c.Output.Date) {
+			failed = true
+			if c.Success {
+				t.Errorf("%d: Date -> %s should be %s", i, ev.Date, c.Output.Date)
+			}
+		}
+
+		if ev.Times != c.Output.Times {
+			failed = true
+			if c.Success {
+				t.Errorf("%d: Times -> %d should be %d", i, ev.Times, c.Output.Times)
+			}
+		}
+
+		if ev.Step[0] != c.Output.Step[0] || ev.Step[1] != c.Output.Step[1] || ev.Step[2] != c.Output.Step[2] {
+			failed = true
+			if c.Success {
+				t.Errorf("%d: Step -> %v should be %v", i, ev.Step, c.Output.Step)
+			}
+		}
+
+		if ev.Amount != c.Output.Amount {
+			failed = true
+			if c.Success {
+				t.Errorf("%d: Amount -> %f should be %f", i, ev.Amount, c.Output.Amount)
+			}
+		}
+
+		if !c.Success && !failed {
+			t.Errorf("%d: should have failed", i)
 		}
 	}
 }
 
-func TestProcess(t *testing.T) {
-	base := NewStats()
+func TestBuildStats(t *testing.T) {
+	now := time.Now()
 
-	testCases := []ProcessCase{
-		/* tc 0 */
-		ProcessCase{
-			[]string{
-				INPUT,
-				"foo",
-				"2020-01-01",
-				"100.02",
-				"0",
-				"bar",
+	bsc := []BuildStatsCase{
+		// tc0
+		BuildStatsCase{
+			[]Transaction{
+				Transaction{
+					0,
+					"foo",
+					"bar",
+					now,
+					200.10,
+				},
 			},
-			base,
+			[]Event{},
 			Stats{
-				[]Tr{
-					Tr{
-						0,
-						"foo",
-						time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
-						100.02,
-						0,
-						"bar",
+				Activity{
+					200.10,
+					[]Entry{
+						Entry{
+							"foo",
+							200.10,
+							now,
+						},
 					},
 				},
-				[]Ev{},
-				Cache{
-					100.02,
-					Period{},
-					Period{},
-				},
-				base.LastCheck,
-				1,
+				Activity{},
+				Activity{},
+				0,
 			},
 			true,
 		},
-		/* **** */
 
-		/* tc 1 */
-		ProcessCase{
-			[]string{
-				PERIOD,
-				"foo",
-				"2020-01-02",
-				"-1",
-				"0,0,0",
-				"20",
-				"0",
-				"bar",
+		// tc1
+		BuildStatsCase{
+			[]Transaction{
+				Transaction{
+					0,
+					"foo",
+					"bar",
+					time.Date(2020, 01, 01, 0, 0, 0, 0, time.UTC),
+					10,
+				},
+				Transaction{
+					1,
+					"bar",
+					"",
+					time.Date(2020, 01, 02, 0, 0, 0, 0, time.UTC),
+					5.5,
+				},
 			},
-			base,
+			[]Event{
+				Event{
+					0,
+					"event",
+					"",
+					now,
+					1,
+					[3]int{0, 0, 1},
+					100.101,
+				},
+				Event{
+					1,
+					"event1",
+					"",
+					now,
+					1,
+					[3]int{0, 0, 2},
+					10.5,
+				},
+				Event{
+					2,
+					"event2",
+					"",
+					now,
+					2,
+					[3]int{0, 0, 3},
+					-22.1,
+				},
+			},
 			Stats{
-				[]Tr{},
-				[]Ev{
-					Ev{
-						0,
-						"foo",
-						time.Date(2020, time.January, 2, 0, 0, 0, 0, time.UTC),
-						-1,
-						[3]int{0, 0, 0},
-						20,
-						0,
-						"bar",
+				Activity{
+					15.5,
+					[]Entry{
+						Entry{
+							"foo",
+							10,
+							time.Date(2020, 01, 01, 0, 0, 0, 0, time.UTC),
+						},
+						Entry{
+							"bar",
+							5.5,
+							time.Date(2020, 01, 02, 0, 0, 0, 0, time.UTC),
+						},
 					},
 				},
-				Cache{},
-				base.LastCheck,
-				1,
+				Activity{
+					110.601,
+					[]Entry{
+						Entry{
+							"event",
+							100.101,
+							now,
+						},
+						Entry{
+							"event1",
+							10.5,
+							now,
+						},
+					},
+				},
+				Activity{
+					-22.1,
+					[]Entry{
+						Entry{
+							"event2",
+							-22.1,
+							now,
+						},
+					},
+				},
+				88.501,
 			},
 			true,
 		},
-		/* **** */
-
-		/* tc 2 */
-		ProcessCase{
-			[]string{
-				PERIOD,
-				"foo",
-				"2019-05-19",
-				"-1",
-				"0,0,1",
-				"20",
-				"0",
-				"bar",
-			},
-			Stats{
-				[]Tr{
-					Tr{
-						0,
-						"foo0",
-						time.Date(2020, time.January, 2, 0, 0, 0, 0, time.UTC),
-						10.0,
-						0,
-						"bar0",
-					},
-					Tr{
-						1,
-						"foo1",
-						time.Date(2020, time.January, 3, 0, 0, 0, 0, time.UTC),
-						10.1,
-						0,
-						"bar1",
-					},
-				},
-				[]Ev{
-					Ev{
-						2,
-						"foo2",
-						time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
-						1,
-						[3]int{0, 0, 1},
-						30.5,
-						0,
-						"bar2",
-					},
-					Ev{
-						3,
-						"foo3",
-						time.Now().AddDate(1, 0, 0),
-						1,
-						[3]int{0, 0, 1},
-						1000,
-						0,
-						"bar3",
-					},
-				},
-				Cache{},
-				time.Now(),
-				4,
-			},
-			Stats{
-				[]Tr{
-					Tr{
-						0,
-						"foo0",
-						time.Date(2020, time.January, 2, 0, 0, 0, 0, time.UTC),
-						10.0,
-						0,
-						"bar0",
-					},
-					Tr{
-						1,
-						"foo1",
-						time.Date(2020, time.January, 3, 0, 0, 0, 0, time.UTC),
-						10.1,
-						0,
-						"bar1",
-					},
-					Tr{
-						4,
-						"foo2",
-						time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
-						30.5,
-						0,
-						"bar2",
-					},
-				},
-				[]Ev{
-					Ev{
-						3,
-						"foo3",
-						time.Now().AddDate(1, 0, 0),
-						1,
-						[3]int{0, 0, 1},
-						1000,
-						0,
-						"bar3",
-					},
-					Ev{
-						5,
-						"foo",
-						time.Date(2019, time.May, 19, 0, 0, 0, 0, time.UTC),
-						-1,
-						[3]int{0, 0, 1},
-						20,
-						0,
-						"bar",
-					},
-				},
-				Cache{
-					50.6,
-					Period{},
-					Period{},
-				},
-				time.Now(),
-				6,
-			},
-			true,
-		},
-		/* **** */
-
-		/* tc 3 */
-		ProcessCase{
-			[]string{
-				"foo",
-			},
-			Stats{},
-			Stats{},
-			false,
-		},
-		/* **** */
-
-		/* tc 4 */
-		ProcessCase{
-			[]string{},
-			Stats{},
-			Stats{},
-			false,
-		},
-		/* **** */
 	}
 
-	for i, tc := range testCases {
-		err := Process(tc.Input, &tc.InState)
+	for i, c := range bsc {
+		failed := false
+		s := BuildStats(c.TrInput, c.EvInput)
 
-		if err != nil {
-			if tc.Success {
-				t.Fatalf("TC %d returned with error %s", i, err)
+		if !checkActivity(s.Treasury, c.Output.Treasury, c.Success, "treasury", i, t) {
+			failed = true
+		}
+		if !checkActivity(s.Income, c.Output.Income, c.Success, "income", i, t) {
+			failed = true
+		}
+		if !checkActivity(s.Expenses, c.Output.Expenses, c.Success, "expenses", i, t) {
+			failed = true
+		}
+
+		if s.Balance != c.Output.Balance {
+			failed = true
+			if c.Success {
+				t.Errorf("%d: balance is %f but should be %f", i, s.Balance, c.Output.Balance)
 			}
-			continue
 		}
 
-		for _, errs := range cmpStats(tc.InState, tc.OutState) {
-			t.Errorf("TC %d -> %s", i, errs)
+		if !c.Success && !failed {
+			t.Errorf("%d: didn't fail", i)
 		}
 	}
+}
+
+func checkActivity(a0, a1 Activity, success bool, name string, i int, t *testing.T) bool {
+	failed := true
+
+	if a0.Total != a1.Total {
+		failed = false
+		if success {
+			t.Errorf("%d: %s -> total is %f but should be %f", i, name, a0.Total, a1.Total)
+		}
+	}
+
+	for j, e0 := range a0.Entries {
+		e1 := a1.Entries[j]
+
+		if e0.Name != e1.Name {
+			failed = false
+			if success {
+				t.Errorf("%d - %d: %s -> name is %s but should be %s", i, j, name, e0.Name, e1.Name)
+			}
+		}
+
+		if e0.Amount != e1.Amount {
+			failed = false
+			if success {
+				t.Errorf("%d - %d: %s -> amount is %f but should be %f", i, j, name, e0.Amount, e1.Amount)
+			}
+		}
+
+		if !e0.Date.Equal(e1.Date) {
+			failed = false
+			if success {
+				t.Errorf("%d - %d: %s -> date is %s but should be %s", i, j, name, e0.Date, e1.Date)
+			}
+		}
+	}
+
+	return failed
 }
