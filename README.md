@@ -1,4 +1,4 @@
-# money
+# DomesticAdvisor
 
 Program to keep track of spendings
 
