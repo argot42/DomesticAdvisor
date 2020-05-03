@@ -54,6 +54,11 @@ type Event struct {
 	Amount      float64
 }
 
+type Timer struct {
+	Id   uint
+	Date time.Time
+}
+
 /* -------------- */
 
 func Parse(in io.Reader) ([]string, error) {
@@ -209,4 +214,16 @@ func UpdateStats(s Stats, f *os.File) error {
 	}
 
 	return nil
+}
+
+func StartTimer(ev Event, now time.Time, timer chan<- Timer) {
+	duration := ev.Date.Sub(now)
+
+	go func() {
+		t := <-time.After(duration)
+		timer <- Timer{
+			ev.Id,
+			t,
+		}
+	}()
 }

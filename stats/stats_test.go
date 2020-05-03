@@ -567,3 +567,29 @@ func TestUpdateStats(t *testing.T) {
 		}
 	}
 }
+
+func TestStartTimer(t *testing.T) {
+	ev := Event{
+		0,
+		"foo",
+		"bar",
+		time.Date(2020, 1, 1, 0, 0, 1, 0, time.UTC),
+		0,
+		[3]int{0, 0, 0},
+		230.10,
+	}
+	now := time.Date(2020, 1, 1, 0, 0, 2, 0, time.UTC)
+	out := make(chan Timer, 5)
+
+	StartTimer(ev, now, out)
+
+	select {
+	case timer := <-out:
+		if ev.Id != timer.Id {
+			t.Fatalf("%d -> %d", timer.Id, ev.Id)
+		}
+
+	case <-time.After(5 * time.Second):
+		t.Fatal("Timeout!")
+	}
+}

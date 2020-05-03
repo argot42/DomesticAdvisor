@@ -39,10 +39,11 @@ func main() {
 	// cleaning
 	fmt.Println("Closing...")
 	status.Close()
-	close(ctl.Done)
+	//close(ctl.Done)
+	ctl.Done <- true
 	// wait for children gorouting to end
 	fmt.Println("Waiting for goroutines to finish")
-	<-ctl.Out
+	<-ctl.Done
 	fmt.Println("bye :)")
 }
 
