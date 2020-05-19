@@ -202,14 +202,14 @@ func inMonth(d, month time.Time) bool {
 }
 
 func UpdateStats(s Stats, f *os.File) error {
-	j, err := json.Marshal(s)
+	serialized, err := json.Marshal(s)
 	if err != nil {
 		return err
 	}
 
 	f.Truncate(0)
 	f.Seek(0, 0)
-	if _, err := f.Write(j); err != nil {
+	if _, err := f.Write(serialized); err != nil {
 		return err
 	}
 

@@ -3,115 +3,138 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"github.com/argot42/DomesticAdvisor/config"
-	"github.com/argot42/DomesticAdvisor/stats"
-	"github.com/argot42/watcher"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+	"github.com/argot42/DomesticAdvisor/config"
+	"github.com/argot42/DomesticAdvisor/stats"
+	"github.com/argot42/watcher"
 )
 
 func main() {
-	cfg, err := config.GetConfig(os.Args)
-	if err != nil {
-		if err == config.ErrConfigFilePath {
-			config.Usage()
-			return
-		}
-		log.Fatalln("config:", err)
-	}
-	ctl, status, err := setupFiles(cfg)
-	if err != nil {
-		log.Fatalln(err)
-	}
+    cfg, err := config.GetConfig(os.Args)
+    if err != nil {
+        if err == config.ErrConfigFilePath {
+            config.Usage()
+            return
+        }
+        log.Fatalln("config:", err)
+    }
+    ctl, status, err := setupFiles(cfg)
+    if err != nil {
+        log.Fatalln("setup:", err)
+    }
 
-	sigs := make(chan os.Signal, 1)
+    // sigterm setup
+    sigs := make(chan os.Signal, 1)
+    signal.Notify(sigs, syscall.SIGTERM)
 
-	signal.Notify(sigs, syscall.SIGTERM)
+    // timer setup
+    timer := make(chan stats.Timer, 10)
 
-	err = start(ctl, status, cfg.Timeout, sigs)
-	if err != nil {
-		log.Fatalln(err)
-	}
+    if err = start(ctl, timer, status, cfg.Timeout, sigs); err != nil {
+        log.Fatalln("runtime:", err)
+    }
 
-	// cleaning
-	fmt.Println("Closing...")
-	status.Close()
-	//close(ctl.Done)
-	ctl.Done <- true
-	// wait for children gorouting to end
-	fmt.Println("Waiting for goroutines to finish")
-	<-ctl.Done
-	fmt.Println("bye :)")
+    // cleaning
+    log.Println("Closing")
+    status.Close()
+    ctl.Done <- true
+    // wait for the goroutines to end
+    log.Println("Wating for goroutines to finish")
+    <-ctl.Done
+    log.Println("bye :)")
 }
 
-func setupFiles(cfg *config.Config) (ctl watcher.Sub, status *os.File, err error) {
-	// watch control file
-	ctl, e := watcher.Watch(cfg.CtlFilePath)
-	if e != nil {
-		err = fmt.Errorf("error setting up ctl file: %s", e)
-		return
-	}
+func setupFiles(cfg *config.Config) (ctl watcher.R, status *os.File, err error) {
+    // watch control file
+    ctl, e := watcher.Read(cfg.CtlFilePath)
+    if e != nil {
+        err = fmt.Errorf("error setting up ctl file: %s", e)
+        return
+    }
 
-	// create status file
-	status, e = os.Create(cfg.StatusPath)
-	if e != nil {
-		err = fmt.Errorf("error setting up ctl file: %s", e)
-		return
-	}
+    // create status file
+    status, e = os.Create(cfg.StatusPath)
+    if e != nil {
+        err = fmt.Errorf("error setting up ctl file: %s", e)
+        return
+    }
 
-	return
+    return
 }
 
-func start(ctl watcher.Sub, status *os.File, timeout time.Duration, sigs chan os.Signal) error {
-	var buffer []byte
-	s := stats.NewStats()
+func start(ctl watcher.R, timer chan stats.Timer, status *os.File, timeout time.Duration, sigs chan os.Signal) error {
+    /* state */
+    var transactions []stats.Transaction
+    var events []stats.Event
 
-End:
-	for {
-		select {
-		case input := <-ctl.Out:
-			if input != 10 { // 10 is newline
-				buffer = append(buffer, input)
-				continue
-			}
+    /********/
+    var buffer []byte
 
-			// parse input
-			parsed, err := stats.Parse(bytes.NewReader(buffer))
-			if err != nil {
-				return fmt.Errorf("parse: %s", err)
-			}
+    End:
+    for {
+        select {
+        case input := <-ctl.Out:
+            // initialize state
+            if input.First {
+                transactions = make([]stats.Transaction, 0, 5)
+                events = make([]stats.Event, 0, 5)
+            }
 
-			err = stats.Process(parsed, &s)
-			if err != nil {
-				return fmt.Errorf("stats: %s", err)
-			}
-			err = stats.Output(status, s)
-			if err != nil {
-				return fmt.Errorf("output: %s", err)
-			}
-			buffer = nil
+            if input.Data != 10 { // 10 is newline
+                buffer = append(buffer, input.Data)
+                continue
+            }
 
-		case e := <-ctl.Err:
-			return fmt.Errorf("error control file: %s", e)
+            // parse input
+            parsed, err := stats.Parse(bytes.NewReader(buffer))
+            if err != nil {
+                return fmt.Errorf("stats: %s", err)
+            }
+            // clean buffer
+            buffer = nil
 
-		case <-time.After(timeout * time.Second):
-			// force an update
-			err := stats.Update(&s)
-			if err != nil {
-				return err
-			}
-			err = stats.Output(status, s)
-			if err != nil {
-				return err
-			}
+            // process input
+            switch(parsed[0]) {
+            case "tr":
+                tr, err := stats.ProcessTransaction(parsed)
+                if err != nil {
+                    log.Println(err)
+                    continue
+                }
 
-		case <-sigs:
-			break End
-		}
-	}
+                transactions = append(transactions, tr)
+            case "ev":
+                ev, err := stats.ProcessEvent(parsed)
+                if err != nil {
+                    log.Println(err)
+                    continue
+                }
 
-	return nil
+                events = append(events, ev)
+                stats.StartTimer(ev, time.Now(), timer)
+            }
+
+            // update stats
+            s := stats.BuildStats(transactions, events)
+
+            if err = stats.UpdateStats(s, status); err != nil {
+                return fmt.Errorf("update: %s", err)
+            }
+
+        case t := <-timer:
+            fmt.Println(t)
+
+        case err := <-ctl.Err:
+            return fmt.Errorf("control file erorr: %s", err)
+
+        case <-sigs:
+            break End
+        }
+    }
+
+    return nil
 }
