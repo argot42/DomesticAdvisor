@@ -44,22 +44,23 @@ func main() {
     ctl.Done <- true
     // wait for the goroutines to end
     log.Println("Wating for goroutines to finish")
-    <-ctl.Done
+    for {
+        _, open := <-ctl.Out
+        if !open {
+            break
+        }
+    }
     log.Println("bye :)")
 }
 
 func setupFiles(cfg *config.Config) (ctl watcher.R, status *os.File, err error) {
     // watch control file
-    ctl, e := watcher.Read(cfg.CtlFilePath)
-    if e != nil {
-        err = fmt.Errorf("error setting up ctl file: %s", e)
-        return
-    }
+    ctl = watcher.Read(cfg.CtlFilePath)
 
     // create status file
-    status, e = os.Create(cfg.StatusPath)
+    status, e := os.Create(cfg.StatusPath)
     if e != nil {
-        err = fmt.Errorf("error setting up ctl file: %s", e)
+        err = fmt.Errorf("status file: %s", e)
         return
     }
 
@@ -89,10 +90,14 @@ func start(ctl watcher.R, timer chan stats.Timer, status *os.File, timeout time.
                 continue
             }
 
+            log.Printf("recv line [%s]\n", string(buffer))
+
             // parse input
             parsed, err := stats.Parse(bytes.NewReader(buffer))
             if err != nil {
-                return fmt.Errorf("stats: %s", err)
+                log.Printf("parsing: %s\n", err)
+                buffer = nil
+                continue
             }
             // clean buffer
             buffer = nil
@@ -116,6 +121,9 @@ func start(ctl watcher.R, timer chan stats.Timer, status *os.File, timeout time.
 
                 events = append(events, ev)
                 stats.StartTimer(ev, time.Now(), timer)
+            default:
+                log.Println(parsed[0], "is not a cmd")
+                continue
             }
 
             // update stats

@@ -69,6 +69,10 @@ func Parse(in io.Reader) ([]string, error) {
 }
 
 func ProcessTransaction(in []string) (Transaction, error) {
+    /*
+    * tr    <name>  <description>   <date>      <amount>
+    * tr    foo     bar             yyyy-mm-dd  200 
+    */
 	if len(in) < 5 {
 		return Transaction{}, fmt.Errorf("process transaction: missing arguments")
 	}
@@ -105,6 +109,10 @@ func ProcessTransaction(in []string) (Transaction, error) {
 }
 
 func ProcessEvent(in []string) (Event, error) {
+    /*
+    * ev    <name>  <description>   <date>      <times> <step>  <amount>
+    * ev    foo     bar             yyyy-mm-dd  1       1,2,3   200
+    */
 	if len(in) < 7 {
 		return Event{}, fmt.Errorf("process event: missing arguments")
 	}
