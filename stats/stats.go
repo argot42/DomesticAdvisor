@@ -77,10 +77,6 @@ func ProcessTransaction(in []string) (Transaction, error) {
 		return Transaction{}, fmt.Errorf("process transaction: missing arguments")
 	}
 
-	// index
-	index := TRINDEX
-	TRINDEX++
-
 	// name
 	name := in[1]
 
@@ -99,27 +95,31 @@ func ProcessTransaction(in []string) (Transaction, error) {
 		return Transaction{}, fmt.Errorf("process transaction: %s", err)
 	}
 
-	return Transaction{
-		index,
-		name,
-		description,
-		date,
-		amount,
-	}, nil
+    return BuildTransaction(name, description, date, amount), nil
+}
+
+func BuildTransaction(name, description string, date time.Time, amount float64) Transaction {
+	// calculate index
+	index := TRINDEX
+	TRINDEX++
+
+    return Transaction {
+        index,
+        name,
+        description,
+        date,
+        amount,
+    }
 }
 
 func ProcessEvent(in []string) (Event, error) {
     /*
-    * ev    <name>  <description>   <date>      <times> <step>  <amount>
-    * ev    foo     bar             yyyy-mm-dd  1       1,2,3   200
+    * ev    <name>  <description>   <date>      <times> <year>,<month>,<day>    <amount>
+    * ev    foo     bar             yyyy-mm-dd  1       1,2,3                   200
     */
 	if len(in) < 7 {
 		return Event{}, fmt.Errorf("process event: missing arguments")
 	}
-
-	// index
-	index := EVINDEX
-	EVINDEX++
 
 	// name
 	name := in[1]
@@ -139,17 +139,32 @@ func ProcessEvent(in []string) (Event, error) {
 		return Event{}, fmt.Errorf("process event: %s", err)
 	}
 
-	// parse step
+    if times == 0 {
+        return Event{}, fmt.Errorf("times can't be 0")
+    }
+
+    // if times is greater than 1 (that means is going to generate a timer) parse step
+    // else ignore steps
 	var step [3]int
 
-	for i, stepStr := range strings.Split(in[5], ",") {
-		s, err := strconv.ParseInt(stepStr, 10, 32)
-		if err != nil {
-			return Event{}, fmt.Errorf("process event: %s", err)
-		}
+    if times > 1 {
+        // parse step
+        for i, stepStr := range strings.Split(in[5], ",") {
+            s, err := strconv.ParseInt(stepStr, 10, 32)
+            if err != nil {
+                return Event{}, fmt.Errorf("process event: %s", err)
+            }
 
-		step[i] = int(s)
-	}
+            step[i] = int(s)
+        }
+
+        if step[0] < 0 || step[1] < 0 || step[2] < 0 {
+            return Event{}, fmt.Errorf("no value in steps should be negative")
+        }
+        if step[0] == 0 && step[1] == 0 && step[2] == 0 {
+            return Event{}, fmt.Errorf("one of the values on steps should be greater than 0")
+        }
+    }
 
 	// parse amount
 	amount, err := strconv.ParseFloat(in[6], 64)
@@ -157,7 +172,15 @@ func ProcessEvent(in []string) (Event, error) {
 		return Event{}, fmt.Errorf("process event: %s", err)
 	}
 
-	return Event{
+    return BuildEvent(name, description, date, int(times), step, amount), nil
+}
+
+func BuildEvent(name, description string, date time.Time, times int, step [3]int, amount float64) Event {
+	// calculate index
+	index := EVINDEX
+	EVINDEX++
+
+    return Event {
 		index,
 		name,
 		description,
@@ -165,7 +188,7 @@ func ProcessEvent(in []string) (Event, error) {
 		int(times),
 		step,
 		amount,
-	}, nil
+    }
 }
 
 func BuildStats(Transactions []Transaction, Events []Event) (stats Stats) {

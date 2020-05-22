@@ -111,6 +111,8 @@ func start(ctl watcher.R, timer chan stats.Timer, status *os.File, timeout time.
                     continue
                 }
 
+                log.Printf("got transaction: %+v\n", tr)
+
                 transactions = append(transactions, tr)
             case "ev":
                 ev, err := stats.ProcessEvent(parsed)
@@ -119,7 +121,12 @@ func start(ctl watcher.R, timer chan stats.Timer, status *os.File, timeout time.
                     continue
                 }
 
+                log.Printf("got event: %+v\n", ev)
+
                 events = append(events, ev)
+
+                log.Println("started timer")
+
                 stats.StartTimer(ev, time.Now(), timer)
             default:
                 log.Println(parsed[0], "is not a cmd")
@@ -130,11 +137,45 @@ func start(ctl watcher.R, timer chan stats.Timer, status *os.File, timeout time.
             s := stats.BuildStats(transactions, events)
 
             if err = stats.UpdateStats(s, status); err != nil {
-                return fmt.Errorf("update: %s", err)
+                return fmt.Errorf("status update: %s", err)
             }
 
         case t := <-timer:
-            fmt.Println(t)
+            log.Printf("timer triggered: %+v\n", t)
+
+            i := findEvent(t.Id, events)
+            if i < 0 {
+                log.Printf("The event with id %d does not exist\n", t.Id)
+                break
+            }
+
+            // selected event
+            ev := &events[i]
+
+            // build new transaction
+            tr := stats.BuildTransaction(ev.Name, ev.Description, t.Date, ev.Amount)
+            transactions = append(transactions, tr)
+
+            ev.Times--
+
+            // when times reaches 0 that means the event should not keep repeating
+            // hence we only update the date and set up a new timer only if times
+            // is greater than zero or negative (that means it will keep reapeating forever)
+            if ev.Times != 0 {
+                // update date
+                newDate := ev.Date.AddDate(ev.Step[0], ev.Step[1], ev.Step[2])
+                ev.Date = newDate
+
+                // set new timer
+                stats.StartTimer(*ev, time.Now(), timer)
+            }
+
+            // update stats
+            s := stats.BuildStats(transactions, events)
+
+            if err := stats.UpdateStats(s, status); err != nil {
+                return fmt.Errorf("timer status update: %s", err)
+            }
 
         case err := <-ctl.Err:
             return fmt.Errorf("control file erorr: %s", err)
@@ -145,4 +186,14 @@ func start(ctl watcher.R, timer chan stats.Timer, status *os.File, timeout time.
     }
 
     return nil
+}
+
+func findEvent(id uint, events []stats.Event) int {
+    for i, ev := range events {
+        if ev.Id == id {
+            return i
+        }
+    }
+
+    return -1
 }

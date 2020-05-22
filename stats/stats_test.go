@@ -40,35 +40,61 @@ type UpdateStatsCase struct {
 	Output string
 }
 
+type BuildTransactionCase struct {
+    Input TrCase
+    Output Transaction
+}
+
+type TrCase struct {
+    Name string
+    Description string
+    Date time.Time
+    Amount float64
+}
+
+type BuildEventCase struct {
+    Input EvCase
+    Output Event
+}
+
+type EvCase struct {
+    Name string
+    Description string
+    Date time.Time
+    Times int
+    Step [3]int
+    Amount float64
+}
+
 func TestParse(t *testing.T) {
 	// setup
 	parseCases := []ParseCase{
-		ParseCase{
+		{
 			"foo b a r",
 			[]string{"foo", "b", "a", "r"},
 			true,
 		},
-		ParseCase{
+		{
 			"foo \"foo bar\"",
 			[]string{"foo", "foo bar"},
 			true,
 		},
-		ParseCase{
+		{
 			"foo \"foo bar\" bar",
 			[]string{"foo", "foo bar", "bar"},
 			true,
 		},
-		ParseCase{
+		{
 			"foo",
 			[]string{"foo"},
 			true,
 		},
-		ParseCase{
+		{
 			"",
 			[]string{""},
 			true,
 		},
-		ParseCase{
+		{
 			"米 こめ",
 			[]string{"米", "こめ"},
 			true,
@@ -98,7 +124,7 @@ func TestParse(t *testing.T) {
 
 func TestProcessTransaction(t *testing.T) {
 	ptc := []ProcessTransactionCase{
-		ProcessTransactionCase{
+		{
 			[]string{"Tr", "foo", "bar", "2020-01-01", "100"},
 			Transaction{
 				0,
@@ -109,7 +135,7 @@ func TestProcessTransaction(t *testing.T) {
 			},
 			true,
 		},
-		ProcessTransactionCase{
+		{
 			[]string{"Tr", "", "", "2021-02-03", "30.10"},
 			Transaction{
 				1,
@@ -120,22 +146,22 @@ func TestProcessTransaction(t *testing.T) {
 			},
 			true,
 		},
-		ProcessTransactionCase{
+		{
 			[]string{"Tr"},
 			Transaction{},
 			false,
 		},
-		ProcessTransactionCase{
+		{
 			[]string{"foo", "bar", "2020-01-01", "200"},
 			Transaction{},
 			false,
 		},
-		ProcessTransactionCase{
+		{
 			[]string{"Tr", "x", "x", "a", "b"},
 			Transaction{},
 			false,
 		},
-		ProcessTransactionCase{
+		{
 			[]string{"", "", "", "", "", "", "", "", ""},
 			Transaction{},
 			false,
@@ -197,7 +223,7 @@ func TestProcessTransaction(t *testing.T) {
 
 func TestProcessEvent(t *testing.T) {
 	tpe := []ProcessEventCase{
-		ProcessEventCase{
+		{
 			[]string{"Ev", "foo", "bar", "2020-10-10", "-1", "0,0,0", "2020"},
 			Event{
 				0,
@@ -210,7 +236,7 @@ func TestProcessEvent(t *testing.T) {
 			},
 			true,
 		},
-		ProcessEventCase{
+		{
 			[]string{"Ev", "", "", "2100-01-02", "10", "1,2,3", "2"},
 			Event{
 				1,
@@ -223,12 +249,12 @@ func TestProcessEvent(t *testing.T) {
 			},
 			true,
 		},
-		ProcessEventCase{
+		{
 			[]string{"", "", "", "", "", "", ""},
 			Event{},
 			false,
 		},
-		ProcessEventCase{
+		{
 			[]string{"Ev", "", "", "", "10", "1,2,0", "100"},
 			Event{},
 			false,
@@ -307,9 +333,9 @@ func TestBuildStats(t *testing.T) {
 
 	bsc := []BuildStatsCase{
 		// tc0
-		BuildStatsCase{
+		{
 			[]Transaction{
-				Transaction{
+				{
 					0,
 					"foo",
 					"bar",
@@ -322,7 +348,7 @@ func TestBuildStats(t *testing.T) {
 				Activity{
 					200.10,
 					[]Entry{
-						Entry{
+						{
 							"foo",
 							200.10,
 							now,
@@ -337,16 +363,16 @@ func TestBuildStats(t *testing.T) {
 		},
 
 		// tc1
-		BuildStatsCase{
+		{
 			[]Transaction{
-				Transaction{
+				{
 					0,
 					"foo",
 					"bar",
 					time.Date(2020, 01, 01, 0, 0, 0, 0, time.UTC),
 					10,
 				},
-				Transaction{
+				{
 					1,
 					"bar",
 					"",
@@ -355,7 +381,7 @@ func TestBuildStats(t *testing.T) {
 				},
 			},
 			[]Event{
-				Event{
+				{
 					0,
 					"event",
 					"",
@@ -364,7 +390,7 @@ func TestBuildStats(t *testing.T) {
 					[3]int{0, 0, 1},
 					100.101,
 				},
-				Event{
+				{
 					1,
 					"event1",
 					"",
@@ -373,7 +399,7 @@ func TestBuildStats(t *testing.T) {
 					[3]int{0, 0, 2},
 					10.5,
 				},
-				Event{
+				{
 					2,
 					"event2",
 					"",
@@ -387,12 +413,12 @@ func TestBuildStats(t *testing.T) {
 				Activity{
 					15.5,
 					[]Entry{
-						Entry{
+						{
 							"foo",
 							10,
 							time.Date(2020, 01, 01, 0, 0, 0, 0, time.UTC),
 						},
-						Entry{
+						{
 							"bar",
 							5.5,
 							time.Date(2020, 01, 02, 0, 0, 0, 0, time.UTC),
@@ -402,12 +428,12 @@ func TestBuildStats(t *testing.T) {
 				Activity{
 					110.601,
 					[]Entry{
-						Entry{
+						{
 							"event",
 							100.101,
 							now,
 						},
-						Entry{
+						{
 							"event1",
 							10.5,
 							now,
@@ -417,7 +443,7 @@ func TestBuildStats(t *testing.T) {
 				Activity{
 					-22.1,
 					[]Entry{
-						Entry{
+						{
 							"event2",
 							-22.1,
 							now,
@@ -497,12 +523,12 @@ func checkActivity(a0, a1 Activity, success bool, name string, i int, t *testing
 
 func TestUpdateStats(t *testing.T) {
 	usc := []UpdateStatsCase{
-		UpdateStatsCase{
+		{
 			Stats{
 				Activity{
 					100.4,
 					[]Entry{
-						Entry{
+						{
 							"foo",
 							100.4,
 							time.Date(2020, 01, 01, 0, 0, 0, 0, time.UTC),
@@ -592,4 +618,154 @@ func TestStartTimer(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Timeout!")
 	}
+}
+
+func TestBuildTransactions(t * testing.T) {
+    TRINDEX = 0
+    now := time.Now()
+
+    cases := []TrCase{
+        {
+            "foo",
+            "bar",
+            now,
+            200,
+        },
+        {
+            "bar",
+            "foo",
+            now,
+            130.9,
+        },
+        {
+            "a",
+            "b",
+            now,
+            11,
+        },
+    }
+
+    // build actual TCs
+    actualTCs := make([]BuildTransactionCase, 0, len(cases))
+
+    for i, c := range cases {
+        tr := Transaction{
+            uint(i),
+            c.Name,
+            c.Description,
+            c.Date,
+            c.Amount,
+        }
+
+        actualTCs = append(actualTCs, BuildTransactionCase{c, tr})
+    }
+
+    for i, tc := range actualTCs {
+        tr := BuildTransaction(
+            tc.Input.Name,
+            tc.Input.Description,
+            tc.Input.Date,
+            tc.Input.Amount,
+        )
+
+        if tr.Id != tc.Output.Id {
+            t.Errorf("TC %d: got id %d and should be %d", i, tr.Id, tc.Output.Id)
+        }
+        if tr.Name != tc.Output.Name {
+            t.Errorf("TC %d: got name %s and should be %s", i, tr.Name, tc.Output.Name)
+        }
+        if tr.Description != tc.Output.Description {
+            t.Errorf("TC %d: got description %s and should be %s", i, tr.Description, tc.Output.Description)
+        }
+        if !tr.Date.Equal(tc.Output.Date) {
+            t.Errorf("TC %d: got date %s and should be %s", i, tr.Date, tc.Output.Date)
+        }
+        if tr.Amount != tc.Output.Amount {
+            t.Errorf("TC %d: got amount %f and should be %f", i, tr.Amount, tc.Output.Amount)
+        }
+    }
+}
+
+func TestBuildEvent(t *testing.T) {
+    EVINDEX = 0
+    now := time.Now()
+
+    cases := []EvCase {
+        {
+            "foo",
+            "bar",
+            now,
+            2,
+            [3]int{1, 2, 3},
+            200,
+        },
+        {
+            "bar",
+            "foo",
+            now,
+            -1,
+            [3]int{0, 0, 1},
+            20,
+        },
+        {
+            "a",
+            "x",
+            now,
+            1,
+            [3]int{0, 0, 0},
+            2000,
+        },
+    }
+
+    // build actual TCs
+    actualTCs := make([]BuildEventCase, 0, len(cases))
+
+    for i, c := range cases {
+        ev := Event{
+            uint(i),
+            c.Name,
+            c.Description,
+            c.Date,
+            c.Times,
+            c.Step,
+            c.Amount,
+        }
+
+        actualTCs = append(actualTCs, BuildEventCase{c, ev})
+    }
+
+    for i, tc := range actualTCs {
+        ev := BuildEvent(
+            tc.Input.Name,
+            tc.Input.Description,
+            tc.Input.Date,
+            tc.Input.Times,
+            tc.Input.Step,
+            tc.Input.Amount,
+        )
+
+        if ev.Id != tc.Output.Id {
+            t.Errorf("TC %d: got id %d and should be %d", i, ev.Id, tc.Output.Id)
+        }
+        if ev.Name != tc.Output.Name {
+            t.Errorf("TC %d: got name %s and should be %s", i, ev.Name, tc.Output.Name)
+        }
+        if ev.Description != tc.Output.Description {
+            t.Errorf("TC %d: got description %s and should be %s", i, ev.Description, tc.Output.Description)
+        }
+        if !ev.Date.Equal(tc.Output.Date) {
+            t.Errorf("TC %d: got date %s and should be %s", i, ev.Date, tc.Output.Date)
+        }
+        if ev.Times != tc.Output.Times {
+            t.Errorf("TC %d: got times %d and should be %d", i, ev.Times, tc.Output.Times)
+        }
+        for j := 0; j < 3; j++ {
+            if ev.Step[j] != tc.Output.Step[j] {
+                t.Errorf("TC %d: got step[%d] %d and should be %d", i, j, ev.Step[j], tc.Output.Step[j])
+            }
+        }
+        if ev.Amount != tc.Output.Amount {
+            t.Errorf("TC %d: got amount %f and should be %f", i, ev.Amount, tc.Output.Amount)
+        }
+    }
 }
